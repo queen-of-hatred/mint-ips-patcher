@@ -105,53 +105,54 @@ int main(int argc, char** argv){
         uint offset = TRIPLE_BYTESWAP(working_buffer);
         index += 3;
         // Read in size and convert from small 
-        printf("%u\n", offset);
         if(index + 2 >= ips_file_size){
-            printf("GO TO ACTIVATED z\n");
+            printf("Invalid IPS file, exiting....\n");
             goto cleanup_buffers;
         }
 
         //Read the size next. If the size is equal to 0, then it is encoded with RLE
         memcpy(working_buffer, &ips_buffer[index], 2);
         uint size = DOUBLE_BYTESWAP(working_buffer);
-        printf("Size is %u\n", size);
         index += 2;
 
 
         //We assume run length encoding
         if(size == 0){
-            printf("RLEEEE\n");
+            if(index + 2 >= ips_file_size){
+                printf("Invalid IPS file, exiting....\n");
+                goto cleanup_buffers;
+            }
 
+            //Read the RLE size, this is how many of the value in the next
+            //byte we have compressed and need to unpack
+            memcpy(working_buffer, &ips_buffer[index], 2);
+            uint rle_size = DOUBLE_BYTESWAP(working_buffer);
+            index += 2;
+
+            if(index + 1 >= ips_file_size){
+                printf("Invalid IPS file, exiting....\n");
+                goto cleanup_buffers;
+            }
+
+            //The size we read is the number of bytes to write into the
+            //rom file from the offset we read earlier, we use the value
+            //located at the index as per the IPS file specification
+            memcpy(&rom_buffer[offset], &ips_buffer[index], rle_size);
+            index++;
         }
         else{
             //We check if we can read that many bytes ahead
             if(index + size > ips_file_size){
-                printf("GO TO ACTIVATED\n");
+                printf("Invalid IPS file, exiting....\n");
                 goto cleanup_buffers;
             }
-            printf("%s\n", rom_buffer);
+            //The size we read is the number of bytes to write into the
+            //rom file from the offset we read earlier.
             memcpy(&rom_buffer[offset], &ips_buffer[index], size);
-            
             index += size;
-            printf("NOT RLE..\n");
         }
-
-        // //Read the size next. If the size is equal to 0, then it is encoded with RLE
-        // uint size = DOUBLE_BYTESWAP()
-        // index += 2;
-        // if(index + 2 >= ips_file_size){
-        //     goto cleanup_buffers;
-        // }
-
-
-        
-        //The ips offset is where the patch will be placed in the source (rom) file
-        
-
-        //Increment number read
+        //Read next three bytes for the offset, start of new IPS record
         memcpy(working_buffer, &ips_buffer[index], 3);
-
-        
     }
 
     FILE* output_file = fopen("output", "w");
@@ -165,6 +166,7 @@ int main(int argc, char** argv){
     cleanup_file_ptrs:
         fclose(rom_file);
         fclose(ips_file);
+        fclose(output_file);
 
     exit(0);
 }
